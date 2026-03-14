@@ -54,7 +54,6 @@ mod tests {
     fn test_basic_extraction() {
         let input = "email: eran@gmail.com";
         let pattern = r"(\w+)@(\w+\.\w+)";
-        // קבוצה 1: השם, קבוצה 2: הדומיין
         assert_eq!(regexp_extract(input, pattern, 1), Some("eran".to_string()));
         assert_eq!(regexp_extract(input, pattern, 2), Some("gmail.com".to_string()));
     }
