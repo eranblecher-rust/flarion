@@ -17,11 +17,10 @@ pub fn get_str_val(col: &ColumnarValue, i: usize) -> Option<&str> {
         ColumnarValue::Scalar(ScalarValue::Utf8(Some(v))) => Some(v),
         ColumnarValue::Scalar(ScalarValue::LargeUtf8(Some(v))) => Some(v),
         _ => None,
-        _ => None,
     }
 }
 
-pub fn get_i64_val<'a>(col: &ColumnarValue, i: usize) -> Option<i64> {
+pub fn get_i64_val(col: &ColumnarValue, i: usize) -> Option<i64> {
     match col {
         ColumnarValue::Array(a) => {
             let arr = a.as_any().downcast_ref::<Int64Array>()?;
