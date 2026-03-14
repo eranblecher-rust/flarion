@@ -232,4 +232,53 @@ mod tests {
         assert_eq!(res_arr.value(0), "");
         Ok(())
     }
+
+    #[test]
+    fn test_unicode_support() -> Result<()> {
+        let udf = RegexpExtractUDF::new();
+        let str_arr: ArrayRef = Arc::new(StringArray::from(vec![Some("שלום: 12345")]));
+        let pat_arr: ArrayRef = Arc::new(StringArray::from(vec![r"(\d+)"]));
+        let idx_arr: ArrayRef = Arc::new(Int64Array::from(vec![1]));
+
+        let args = vec![ColumnarValue::Array(str_arr), ColumnarValue::Array(pat_arr), ColumnarValue::Array(idx_arr)];
+        let result = udf.invoke_batch(&args, 1)?;
+        let arr = result.into_array(1)?;
+        let res_arr = arr.as_any().downcast_ref::<StringArray>().unwrap();
+
+        assert_eq!(res_arr.value(0), "12345");
+        Ok(())
+    }
+
+    #[test]
+    fn test_empty_batch() -> Result<()> {
+        let udf = RegexpExtractUDF::new();
+        let str_arr: ArrayRef = Arc::new(StringArray::from(Vec::<Option<&str>>::new()));
+        let pat_arr: ArrayRef = Arc::new(StringArray::from(Vec::<Option<&str>>::new()));
+        let idx_arr: ArrayRef = Arc::new(Int64Array::from(Vec::<i64>::new()));
+
+        let args = vec![ColumnarValue::Array(str_arr), ColumnarValue::Array(pat_arr), ColumnarValue::Array(idx_arr)];
+        let result = udf.invoke_batch(&args, 0)?;
+        let arr = result.into_array(0)?;
+        assert_eq!(arr.len(), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_mixed_nulls() -> Result<()> {
+        let udf = RegexpExtractUDF::new();
+
+        let str_arr: ArrayRef = Arc::new(StringArray::from(vec![Some("a@b.com"), None, Some("c@d.com")]));
+        let pat_arr: ArrayRef = Arc::new(StringArray::from(vec![r"(\w+)@(\w+\.\w+)"; 3]));
+        let idx_arr: ArrayRef = Arc::new(Int64Array::from(vec![1, 1, 1]));
+
+        let args = vec![ColumnarValue::Array(str_arr), ColumnarValue::Array(pat_arr), ColumnarValue::Array(idx_arr)];
+        let result = udf.invoke_batch(&args, 3)?;
+        let arr = result.into_array(3)?;
+        let res_arr = arr.as_any().downcast_ref::<StringArray>().unwrap();
+
+        assert_eq!(res_arr.value(0), "a");
+        assert!(res_arr.is_null(1));
+        assert_eq!(res_arr.value(2), "c");
+        Ok(())
+    }
 }
