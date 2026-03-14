@@ -85,6 +85,7 @@ mod tests {
     use super::*;
     use datafusion::arrow::array::{StringArray, Int64Array, ArrayRef};
     use datafusion::logical_expr::ColumnarValue;
+    use datafusion::scalar::ScalarValue;
 
     #[test]
     fn test_regexp_extract_basic() -> Result<()> {
@@ -280,5 +281,48 @@ mod tests {
         assert!(res_arr.is_null(1));
         assert_eq!(res_arr.value(2), "c");
         Ok(())
+    }
+
+    #[test]
+    fn test_performance_scalar_vs_array() -> Result<()> {
+        use std::time::Instant;
+        let udf = RegexpExtractUDF::new();
+        let batch_size = 100_000;
+
+        let str_arr: ArrayRef = Arc::new(StringArray::from(vec![Some("data123"); batch_size]));
+        let pat_arr: ArrayRef = Arc::new(StringArray::from(vec![r"(\d+)"; batch_size]));
+        let idx_arr: ArrayRef = Arc::new(Int64Array::from(vec![1; batch_size]));
+        let array_args = vec![ColumnarValue::Array(str_arr), ColumnarValue::Array(pat_arr), ColumnarValue::Array(idx_arr)];
+
+        let scalar_args = vec![
+            ColumnarValue::Scalar(ScalarValue::Utf8(Some("data123".to_string()))),
+            ColumnarValue::Scalar(ScalarValue::Utf8(Some(r"(\d+)".to_string()))),
+            ColumnarValue::Scalar(ScalarValue::Int64(Some(1))),
+        ];
+
+        let start_array = Instant::now();
+        let _ = udf.invoke_batch(&array_args, batch_size)?;
+        let duration_array = start_array.elapsed();
+
+        let start_scalar = Instant::now();
+        let _ = udf.invoke_batch(&scalar_args, batch_size)?;
+        let duration_scalar = start_scalar.elapsed();
+
+        println!("Array took: {:?}, Scalar took: {:?}", duration_array, duration_scalar);
+
+        assert!(duration_scalar <= duration_array, "Scalar should be faster than Array processing");
+        Ok(())
+    }
+
+    #[test]
+    fn test_invalid_arg_count() {
+        let udf = RegexpExtractUDF::new();
+        let args = vec![
+            ColumnarValue::Array(Arc::new(StringArray::from(vec![Some("a")]))),
+            ColumnarValue::Array(Arc::new(StringArray::from(vec![r"(\d+)"]))),
+        ];
+
+        let result = udf.invoke_batch(&args, 1);
+        assert!(result.is_err(), "Should return an error for invalid argument count");
     }
 }
