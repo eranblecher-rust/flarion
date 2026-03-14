@@ -6,6 +6,7 @@ use datafusion::execution::FunctionRegistry;
 
 mod regexp_kernel;
 mod regexp_extract;
+mod utils;
 
 #[tokio::main]
 async fn main() -> Result<()> {

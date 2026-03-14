@@ -1,11 +1,12 @@
 use crate::regexp_kernel::regexp_extract;
-use datafusion::arrow::array::{Array, StringArray, Int64Array, StringBuilder};
+use datafusion::arrow::array::StringBuilder;
 use datafusion::arrow::datatypes::DataType;
 use datafusion::logical_expr::{ColumnarValue, ScalarUDFImpl, Signature, Volatility};
 use datafusion::error::{Result, DataFusionError};
 use std::any::Any;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use crate::utils::{get_i64_val, get_str_val};
 
 const EXPECTED_ARGS: usize = 3;
 const STR_COL_IDX: usize = 0;
@@ -55,32 +56,22 @@ impl ScalarUDFImpl for RegexpExtractUDF {
             )));
         }
 
-        let arrays = ColumnarValue::values_to_arrays(args)?;
-
-        let strs = arrays[STR_COL_IDX].as_any().downcast_ref::<StringArray>()
-            .ok_or_else(|| DataFusionError::Internal("First argument must be a string array".to_string()))?;
-        let patterns = arrays[PAT_COL_IDX].as_any().downcast_ref::<StringArray>()
-            .ok_or_else(|| DataFusionError::Internal("Second argument must be a string array".to_string()))?;
-        let idxs = arrays[IDX_COL_IDX].as_any().downcast_ref::<Int64Array>()
-            .ok_or_else(|| DataFusionError::Internal("Third argument must be an int64 array".to_string()))?;
-
         let mut builder = StringBuilder::with_capacity(batch_size, DEFAULT_BUILDER_CAPACITY);
 
         for i in 0..batch_size {
-            if strs.is_null(i) || patterns.is_null(i) || idxs.is_null(i) {
-                builder.append_null();
-            } else {
-                let idx = idxs.value(i);
+            let s = get_str_val(&args[STR_COL_IDX], i);
+            let p = get_str_val(&args[PAT_COL_IDX], i);
+            let idx = get_i64_val(&args[IDX_COL_IDX], i);
 
-                if idx < 0{
-                    builder.append_null();
-                }
-                else{
-                    match regexp_extract(strs.value(i), patterns.value(i), idx) {
+            match (s, p, idx) {
+                (Some(input), Some(pattern), Some(i)) if i >= 0 => {
+                    match regexp_extract(input, pattern, i) {
                         Some(val) => builder.append_value(val),
-                        None => builder.append_value(""),
+                        None => builder.append_null(),
                     }
                 }
+                // אם אחד הארגומנטים הוא NULL או האינדקס שלילי
+                _ => builder.append_null(),
             }
         }
 
@@ -90,6 +81,7 @@ impl ScalarUDFImpl for RegexpExtractUDF {
 
 #[cfg(test)]
 mod tests {
+    use arrow::array::Array;
     use super::*;
     use datafusion::arrow::array::{StringArray, Int64Array, ArrayRef};
     use datafusion::logical_expr::ColumnarValue;
@@ -223,5 +215,21 @@ mod tests {
         let res_arr = arr.as_any().downcast_ref::<StringArray>().unwrap();
 
         assert!(res_arr.is_null(0), "Negative index should result in a NULL value");
+    }
+
+    #[test]
+    fn test_out_of_bound_index_handling() -> Result<()> {
+        let udf = RegexpExtractUDF::new();
+        let str_arr: ArrayRef = Arc::new(StringArray::from(vec![Some("email: test@gmail.com")]));
+        let pat_arr: ArrayRef = Arc::new(StringArray::from(vec![r"(\w+)@(\w+\.\w+)"]));
+        let idx_arr: ArrayRef = Arc::new(Int64Array::from(vec![100]));
+
+        let args = vec![ColumnarValue::Array(str_arr), ColumnarValue::Array(pat_arr), ColumnarValue::Array(idx_arr)];
+        let result = udf.invoke_batch(&args, 1)?;
+        let arr = result.into_array(1)?;
+        let res_arr = arr.as_any().downcast_ref::<StringArray>().unwrap();
+
+        assert_eq!(res_arr.value(0), "");
+        Ok(())
     }
 }
