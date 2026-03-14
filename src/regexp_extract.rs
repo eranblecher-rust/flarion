@@ -70,7 +70,6 @@ impl ScalarUDFImpl for RegexpExtractUDF {
                         None => builder.append_null(),
                     }
                 }
-                // אם אחד הארגומנטים הוא NULL או האינדקס שלילי
                 _ => builder.append_null(),
             }
         }
@@ -175,9 +174,9 @@ mod tests {
             Some("user_789")
         ]));
 
-        let pat_scalar = ColumnarValue::Scalar(datafusion::scalar::ScalarValue::Utf8(Some(r"(\d+)".to_string())));
+        let pat_scalar = ColumnarValue::Scalar(ScalarValue::Utf8(Some(r"(\d+)".to_string())));
 
-        let idx_scalar = ColumnarValue::Scalar(datafusion::scalar::ScalarValue::Int64(Some(1)));
+        let idx_scalar = ColumnarValue::Scalar(ScalarValue::Int64(Some(1)));
 
         let args = vec![
             ColumnarValue::Array(str_arr),
