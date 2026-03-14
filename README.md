@@ -1,25 +1,26 @@
 DataFusion Regexp Extract UDF
 
-This project implements a high-performance custom regexp_extract User-Defined Function (UDF) for Apache DataFusion. It is designed to provide robust regex extraction while ensuring system stability and high throughput through optimized caching mechanisms.
-
+An implementation of a regexp_extract User-Defined Function (UDF) for Apache DataFusion, designed to provide Spark-like regex extraction behavior for query processing.
 Key Features
 
-    High Performance: Utilizes Moka Cache to manage both regex compilation and extraction results, significantly reducing CPU overhead for repeated patterns and inputs.
+    Regex Compilation Caching: Utilizes a Moka cache for compiled Regex objects, preventing redundant re-compilation of patterns across row iterations.
 
-    Memory Optimization: Implements FxHash (via rustc-hash) to represent keys as u64 instead of strings, effectively preventing heap fragmentation and reducing the overall memory footprint in high-concurrency environments.
+    Standardized Semantics: Designed to handle capture groups, negative indices, and out-of-bounds requests by mapping them to NULL or empty strings, consistent with common SQL engine expectations.
 
-    Defensive Programming: Provides comprehensive protection against Panic scenarios, such as negative indices, by enforcing strict input validation and mapping invalid states to standard SQL NULL or empty strings.
+    Defensive Design: Includes robust input sanitization to ensure stability and prevent runtime panics when processing malformed patterns or null inputs.
 
-    Comprehensive Testing: Includes unit tests, integration tests, and performance benchmarks to ensure correctness and efficiency under load.
+    Extensive Testing: Includes unit and integration tests covering standard use cases, batch processing, and edge-case scenarios.
 
 Project Architecture
 
-    regexp_kernel.rs: The computational core. Handles regex execution, cache management, and input sanitization.
+    regexp_kernel.rs: The computational core. Handles regex execution and manages the pattern compilation cache.
 
-    regexp_extract.rs: Implements the ScalarUDFImpl trait, providing the necessary interface for DataFusion’s query engine.
+    regexp_extract.rs: Implements the ScalarUDFImpl trait, providing the necessary interface for the DataFusion query engine.
 
-    main.rs: Contains end-to-end integration tests and usage examples for both SQL and DataFrame APIs.
+    utils.rs: Acts as the mediation layer between the UDF interface and the computation kernel. It provides utility functions for safe data extraction and type handling from DataFusion’s ColumnarValue (scalars and arrays).
+
+    main.rs: Serves as the integration entry point, providing examples for both SQL and DataFrame API usage.
 
 Engineering Notes
 
-In high-throughput systems, using FxHash for cache keys allows us to bypass the overhead of hashing and storing long strings, leading to significant performance gains-demonstrating a substantial speed improvement in regex compilation scenarios compared to raw execution.
+The implementation focuses on reducing CPU-intensive operations during query execution. By caching compiled Regex objects, we mitigate the performance penalty of frequent pattern instantiation. The addition of utils.rs streamlines the flow between the UDF interface and the core kernel, ensuring that different input types (scalars vs. arrays) are handled consistently - a critical aspect for maintaining efficiency within the DataFusion execution engine.
